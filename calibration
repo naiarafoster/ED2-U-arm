@@ -1,0 +1,86 @@
+#include <Servo.h>
+
+Servo pinky, ring;
+
+int analogPin = 3;    
+int val = 0;
+
+int buttonPin = 7;      //button
+int button = 0;
+
+int n = 0;              //calibration
+int calibrate[100];
+int fingercal = 0;
+
+  void setup()
+  {
+    ring.attach(9);  //Attach the servo for the four fingers to pin9
+  //  pinky.attach(8);   // Attach the servo for the thumb to pin 8
+    Serial.begin(9600);  // this is for serial monitor to see the muscle sensor value you're getting
+   pinMode(buttonPin , INPUT);
+   
+     Serial.begin(14400);                 //for
+    Serial.println("CLEARDATA");          //excel
+Serial.println("LABEL,Acolumn");          //use
+Serial.println("RESETTIMER");             //only
+  }
+  void loop()
+{
+
+//  if( val < 550) //if you flex and the sensor value is greater than 550 then close servos--adjust this value to your muscle sensor value
+ 
+//button = analogRead(buttonPin);   //reads button
+// if(fingercal ==0)
+//{
+      // if (button <= 0)               // when button is not pressed do nothing
+      //  {
+      //  ring.write(0);
+      //  }
+          //    else                      // calibrate finger 1
+          //{
+          //    while(n < 100)
+          //{
+            val = analogRead(analogPin); //muscle sensor connected to pin A3 being stated as val
+            Serial.println(val);
+          //calibrate[n] = val;
+          //n = n+1;
+          //  ring.write(90);
+                                  Serial.print("DATA, read:, ");    //excel read, 
+                                  Serial.print(calibrate[n]);       //not needed 
+                                  Serial.println();                 //after knowing 
+                                  delay(5);                         //it works
+         // calculate minimum and maximum from calibrate[n] and assign values to min1, max1
+          //n=0;
+  //        fingercal = 1;     //next finger
+          //     }
+          //}
+                                    //repeat process for 5 fingers
+//}
+// else if(fingercal == 1)
+//{
+      // if (button <= 0)               // when button is not pressed do nothing
+      //  {
+      //  ring.write(0);
+      //  }
+          //    else                      // calibrate finger 2
+          //{
+          //    while(n < 100)
+          //{
+    //        val = analogRead(analogPin); //muscle sensor connected to pin A3 being stated as val
+    //        Serial.println(val);
+          //calibrate[n] = val;
+          //n = n+1;
+          //  ring.write(90);
+      //                            Serial.print("DATA, read:, ");    //excel read, 
+      //                            Serial.print(calibrate[n]);       //not needed 
+      //                           Serial.println();                 //after knowing 
+      //                            delay(5);                         //it works
+         // calculate minimum and maximum from calibrate[n] and assign values to min2, max2
+          //n=0;
+      //    fingercal = 2;    //next finger
+          //     }
+//}
+//}
+
+//  delay(200);
+}
