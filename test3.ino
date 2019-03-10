@@ -33,7 +33,7 @@ void loop()
     
  // lowerarm = analogRead(A2); //lower forearm
   upperarm = analogRead(A3); //upper forearm
-  biceps = analogRead(A4);
+  biceps = analogRead(A4);   //bicept
 
  // Serial.print("sensor 1 value: ");
  //   Serial.print(lowerarm); 
@@ -43,7 +43,7 @@ void loop()
    Serial.print(upperarm); 
  Serial.print("   "); 
   Serial.println(threshold2); 
-   Serial.print("sensor  value: ");
+   Serial.print("sensor 3 value: ");
 Serial.print(biceps);
  Serial.print("   "); 
   Serial.println(threshold3); 
