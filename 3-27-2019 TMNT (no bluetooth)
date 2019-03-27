@@ -1,0 +1,192 @@
+/*U-arm
+Creators: Leonardo Rivas, Alina Tutuianu, Niara Foster, Eliezer Montes
+purpose of code: This code makes the automatic calibration,
+8 different gestures,and changes between two modes,
+no bluetooth connected at this point*/
+#include <Servo.h>
+Servo thumb, index, middle, pinky, thumbSide;
+int n=0;
+int a = 1;
+int button;
+int threshold1 = 0;
+int threshold2 = 0;
+int threshold3 = 0;
+                  //sensor variables    
+int lowerarm = 0;
+int upperarm = 0;
+int biceps = 0;
+
+void setup() {
+   thumb.attach(4);    //Attach the servo for the 1st finger to pin6
+   index.attach(5);    //Attach the servo for the 2nd finger to pin7
+   middle.attach(6);   //Attach the servo for the 3rd finger to pin8
+   pinky.attach(7);    //Attach the servo for the 4th finger to pin9
+   thumbSide.attach(8);//Thumb side to side motion servo
+   
+   
+   Serial.begin(9600);  // this is for serial monitor to see the muscle sensor value you're getting   
+}
+
+void loop() 
+{
+  
+  if(n==0)                      //this is the calibration stage
+  {                            //futureristi idea: ask user to relax the arm,
+   threshold1 = calibrate(1);  // and press the button when ready. 
+  threshold2 = calibrate(2);          
+   threshold3 = calibrate(3);
+    n++;
+    }
+    else
+    
+  lowerarm = analogRead(A2); //lower forearm
+  upperarm = analogRead(A3); //upper forearm
+  biceps = analogRead(A4);   //bicept
+
+  Serial.print("sensor 1 value: ");   //may not be needed in a future
+    Serial.print(lowerarm);           //informational area
+ Serial.print("   ");                 
+ Serial.println(threshold1); 
+  Serial.print("sensor 2 value: ");
+   Serial.print(upperarm); 
+ Serial.print("   "); 
+  Serial.println(threshold2); 
+   Serial.print("sensor 3 value: ");
+Serial.print(biceps);
+ Serial.print("   "); 
+  Serial.println(threshold3); 
+  
+//button for mode changing
+  button = analogRead(A7);
+   if (button > 900 && a == 1)         // when button is not pressed do nothing
+        {
+          a = 0;
+          delay(500);
+        }
+             else if (button > 900 && a == 0)   
+             {
+             a= 1; 
+                       delay(500);
+             }
+
+if(a==1)    //mode 1
+{
+if(biceps> threshold3)
+{
+  close_hand();}
+  else if (lowerarm > threshold1)
+  {
+    peace_out();}
+    else if(upperarm> threshold2)
+    {pincing();}
+    else
+    open_hand();
+}
+    else if (a==0)      //mode 2
+    {
+  if(biceps> threshold3)
+{
+  pointing();
+  }
+  else if (lowerarm > threshold1)
+  {
+    alright();}
+    else if(upperarm> threshold2)
+    {thumb_up();}
+    else
+    open_hand();
+    }
+}
+
+int calibrate(int set)
+{
+  int thresh =0;
+ 
+  if(set==1)
+  {
+  for (int i = 0; i < 1000; i++)
+  { thresh += analogRead(A2);  }
+  thresh = thresh/1000 +70; }
+  
+  else if(set==2)
+  {
+  for (int i = 0; i < 1000; i++)
+  {    thresh += analogRead(A3); }
+  thresh = thresh/1000+ 70;}
+  
+   else if(set==3)
+  {  for (int i = 0; i < 1000; i++)
+  {  thresh += analogRead(A4);  }
+  thresh = thresh/1000+70 ;}
+  
+  return thresh;
+  }
+
+void open_hand()
+{thumb.write(100);
+ index.write(180);
+ middle.write(0);
+ pinky.write(0);
+ thumbSide.write(70);
+ delay(500); }
+ 
+ void close_hand() 
+ {thumb.write(10);
+ index.write(0);  
+ middle.write(180);
+ pinky.write(180);
+ thumbSide.write(30);
+ delay(500);}
+ 
+ void pointing()
+ {thumb.write(10);
+ index.write(180);
+ middle.write(180);
+ pinky.write(180);
+  thumbSide.write(30);
+ delay(500); }
+ 
+ void pincing()
+ {thumb.write(30);
+ index.write(20);
+ middle.write(100);
+ pinky.write(0);
+  thumbSide.write(0);
+  delay(500); }
+
+ void peace_out()
+ {thumb.write(10);
+ index.write(180);
+ middle.write(0);
+ pinky.write(180);
+  thumbSide.write(20);
+ delay(500); }
+
+ void alright()
+ {thumb.write(40);
+ index.write(20);
+ middle.write(0);
+ pinky.write(0);
+  thumbSide.write(0);
+ delay(500);}
+
+ void  thumb_up()
+ {thumb.write(100);
+ index.write(0);
+ middle.write(180);
+ pinky.write(180);
+  thumbSide.write(70);
+ delay(500); }
+
+ void come_here()
+ {
+ while( biceps >= threshold3 &&  upperarm >= threshold2)
+ {
+  close_hand();
+  delay(400);
+  pointing();
+  delay(400);
+  upperarm = analogRead(A3);
+ // lowerarm = analogRead(A2); 
+  biceps = analogRead(A4);  
+} }
