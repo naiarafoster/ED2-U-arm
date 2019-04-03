@@ -6,10 +6,11 @@
 #include <SoftwareSerial.h>
 //library for non-volatile memory
 #include <EEPROM.h>
-//library for Voltage reading
+//library for Voltage reading and LCD display
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+#include <Fonts/FreeMonoBoldOblique12pt7b.h>
 //Instances of Servo class
 Servo thumbServo, indexServo, middleServo, ringPinkyServo, thumbSideServo;
 
@@ -27,9 +28,9 @@ SoftwareSerial BTserial(2, 3);
 #define thumbSidePin 8
 
 //define Pins for MyoWare sensors
+#define bicepsPin A1
 #define lowerArmPin A2
 #define upperArmPin A3
-#define bicepsPin A1
 
 //define pin for button
 #define buttonPin 12
@@ -115,7 +116,7 @@ void pointing();
 void pincing();
 void peace_out();
 void alright();
-void  thumb_up();
+void thumb_up();
 void come_here();
 void doAllGestures();
 
@@ -152,15 +153,18 @@ void setup() {
 
   // LCD setup
   Display.clearDisplay();
-  // battery in LCD
-  Display.setTextSize(2);
+  Display.setFont(&FreeMonoBoldOblique12pt7b);
+  Display.setTextSize(0);
   Display.setTextColor(WHITE, BLACK);
-  Display.setCursor(0, 0);
+  Display.setCursor(0, 18);
   Display.println("U-Arm");
+  Display.drawLine(1,22,72,22,WHITE);  
+  Display.drawLine(0,24,70,24,WHITE);
   Display.fillRect(123,9.5,5,8,WHITE);
   Display.drawRect(75,0,48,27,WHITE);
   Display.display();
   delay (1000);
+  Display.setFont(NULL);
 
   //We need to read all the thresholds stored in EEPROM and turn the calibrated boolean variables true
   //writeThresholdsToEEPROM();
@@ -271,39 +275,39 @@ DrawTitles(double(readVcc())/1024);
     }
     else if (lowerArmValue > lowerArmThreshold)
     { pincing();
-    gest ="  pincing   ";
+    gest ="  pincing ";
       delay(1500);
     }
     else if (upperArmValue > upperArmThreshold)
     { pointing();
-    gest= " pointing  ";
+    gest= " pointing ";
       delay(1500);
     }
     else if (bicepsValue < bicepsThreshold && upperArmValue < upperArmThreshold && lowerArmValue < lowerArmThreshold)
     { open_hand();
-    gest= " open hand ";
+    gest= " open hand";
     }
   }
   else if (mode == 2)
   {
     if (bicepsValue > bicepsThreshold && lowerArmValue < lowerArmThreshold)
     { peace_out();
-    gest = " peace out ";
+    gest = " peace out";
       delay(1500);
     }
     else if (lowerArmValue > lowerArmThreshold)
     { alright();
-    gest= "  alright   ";
+    gest= "  alright ";
       delay(1500);
     }
     else if (upperArmValue > upperArmThreshold)
     { thumb_up();
-    gest= " thumb up  ";
+    gest= " thumb up ";
       delay(1500);
     }
     else if (bicepsValue < bicepsThreshold && upperArmValue < upperArmThreshold && lowerArmValue < lowerArmThreshold)
     { open_hand();
-    gest= " open hand ";
+    gest= " open hand";
     }
   }
 
@@ -367,6 +371,7 @@ void DrawTitles(double volt) {
   Display.print(" Set ");
   Display.println(mode);
   Display.print(gest);
+   Display.display();
    if(volt >= 4.65)
  { Display.fillRect(77,2,8,23,WHITE);
    Display.fillRect(86,2,8,23,WHITE);
