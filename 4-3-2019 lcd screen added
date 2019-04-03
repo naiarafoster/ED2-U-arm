@@ -1,0 +1,299 @@
+/*U-arm
+Creators: Leonardo Rivas, Alina Tutuianu, Niara Foster, Eliezer Montes
+purpose of code: This code makes the automatic calibration,
+8 different gestures,and changes between two modes,
+no bluetooth connected at this point*/
+#include <Servo.h>
+//LCD setup
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#define OLED_RESET 4
+Adafruit_SSD1306 Display(OLED_RESET);
+
+Servo thumb, index, middle, pinky, thumbSide;
+int n=0;
+int mode = 1;
+int button;
+String  gest= " open hand";
+int threshold1 = 0;
+int threshold2 = 0;
+int threshold3 = 0;
+                  //sensor variables    
+int lowerarm = 0;
+int upperarm = 0;
+int biceps = 0;
+
+void setup() {
+   thumb.attach(4);    //Attach the servo for the 1st finger to pin6
+   index.attach(5);    //Attach the servo for the 2nd finger to pin7
+   middle.attach(6);   //Attach the servo for the 3rd finger to pin8
+   pinky.attach(7);    //Attach the servo for the 4th finger to pin9
+   thumbSide.attach(8);//Thumb side to side motion servo
+
+   //LCD setup
+  Display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+  Display.clearDisplay();
+  // battery in LCD
+  Display.setTextSize(2);
+  Display.setTextColor(WHITE, BLACK);
+  Display.setCursor(0, 0);
+  Display.println("U-Arm");
+  Display.fillRect(123,9.5,5,8,WHITE);
+  Display.drawRect(75,0,48,27,WHITE);
+  Display.display();
+  delay (1000);
+  
+   Serial.begin(9600);  // this is for serial monitor to see the muscle sensor value you're getting   
+}
+
+void loop() 
+{
+  DrawTitles(double(readVcc())/1024);
+    if(n==0)                      //this is the calibration stage
+  {                            //futureristi idea: ask user to relax the arm,
+   threshold1 = calibrate(1);  // and press the button when ready. 
+  threshold2 = calibrate(2);          
+   threshold3 = calibrate(3);
+    n++;
+    }
+    else
+    
+  lowerarm = analogRead(A2); //lower forearm
+  upperarm = analogRead(A3); //upper forearm
+  biceps = analogRead(A1);   //bicept
+
+  Serial.print("sensor 1 value: ");   //may not be needed in a future
+    Serial.print(lowerarm);           //informational area
+ Serial.print("   ");                 
+ Serial.println(threshold1); 
+  Serial.print("sensor 2 value: ");
+   Serial.print(upperarm); 
+ Serial.print("   "); 
+  Serial.println(threshold2); 
+   Serial.print("sensor 3 value: ");
+Serial.print(biceps);
+ Serial.print("   "); 
+  Serial.println(threshold3); 
+  
+//button for mode changing
+  button = analogRead(A7);
+   if (button > 900 && mode == 1)         // when button is not pressed do nothing
+        {
+          mode = 2;
+          delay(500);
+        }
+             else if (button > 900 && mode == 2)   
+             {
+             mode= 1; 
+                       delay(500);
+             }
+
+if(mode==1)    //mode 1
+{
+if(biceps> threshold3)
+{
+  close_hand(); 
+  gest= "close hand";}
+  else if (lowerarm > threshold1)
+  {
+    peace_out(); 
+    gest = " peace out ";}
+    else if(upperarm> threshold2)
+    {pincing();
+    gest ="  pincing   ";}
+    else{
+    open_hand();
+    gest= " open hand ";}
+    
+}
+    else if (mode==2)      //mode 2
+    {
+  if(biceps> threshold3)
+{
+  pointing();
+  gest= " pointing  ";
+  }
+  else if (lowerarm > threshold1)
+  {
+    alright();
+    gest= "  alright   ";}
+    else if(upperarm> threshold2)
+    {thumb_up();
+    gest= " thumb up  ";}
+    else{
+    open_hand();
+    gest= " open hand ";}
+    }
+}
+
+int calibrate(int set)
+{
+  int thresh =0;
+ 
+  if(set==1)
+  {
+  for (int i = 0; i < 1000; i++)
+  { thresh += analogRead(A2);  }
+  thresh = thresh/1000 +70; }
+  
+  else if(set==2)
+  {
+  for (int i = 0; i < 1000; i++)
+  {    thresh += analogRead(A3); }
+  thresh = thresh/1000+ 70;}
+  
+   else if(set==3)
+  {  for (int i = 0; i < 1000; i++)
+  {  thresh += analogRead(A1);  }
+  thresh = thresh/1000+70 ;}
+  
+  return thresh;
+  }
+  //Voltage reader for battery level
+long readVcc() {
+  long result;
+  // Read 1.1V reference against AVcc
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Convert
+  while (bit_is_set(ADCSRA, ADSC));
+  result = ADCL;
+  result |= ADCH << 8;
+  result = 1126400L / result; // Back-calculate AVcc in mV
+  return result;
+}
+//LCD 
+void DrawTitles(double volt) {
+  
+  Display.setTextSize(2);
+  Display.setTextColor(WHITE, BLACK);
+    Display.setCursor(25, 30);
+  Display.print(" Set ");
+  Display.println(mode);
+  Display.println(gest);
+   if(volt >= 4.65)
+ { Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,WHITE);
+   Display.fillRect(113,2,8,23,WHITE);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);}
+   else if(volt < 4.72 &&volt >= 4.62)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,WHITE);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);}
+   else if(volt < 4.62 &&volt >= 4.52)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);
+   Display.fillTriangle(103,17,  105,16,  103,15, WHITE);
+   Display.fillTriangle(112,5,  103,7,  103,10, WHITE);
+  }
+   else if(volt < 4.52 &&volt >= 4.42)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);
+   Display.fillTriangle(94,20,  105,16,  99,11, WHITE);
+   Display.fillTriangle(94,15,  94,20,  99,11, WHITE);
+   }
+   else if(volt < 4.42 &&volt >= 4.32)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,BLACK);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, WHITE);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);}
+   else 
+   {Display.fillRect(77,2,8,23,BLACK);
+   Display.fillRect(86,2,8,23,BLACK);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, WHITE);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);}
+   Display.display();
+}
+
+void open_hand()
+{thumb.write(100);
+ index.write(180);
+ middle.write(0);
+ pinky.write(0);
+ thumbSide.write(70);
+ delay(500); }
+ 
+ void close_hand() 
+ {thumb.write(10);
+ index.write(0);  
+ middle.write(180);
+ pinky.write(180);
+ thumbSide.write(30);
+ delay(500);}
+ 
+ void pointing()
+ {thumb.write(10);
+ index.write(180);
+ middle.write(180);
+ pinky.write(180);
+  thumbSide.write(30);
+ delay(500); }
+ 
+ void pincing()
+ {thumb.write(30);
+ index.write(20);
+ middle.write(100);
+ pinky.write(0);
+  thumbSide.write(0);
+  delay(500); }
+
+ void peace_out()
+ {thumb.write(10);
+ index.write(180);
+ middle.write(0);
+ pinky.write(180);
+  thumbSide.write(20);
+ delay(500); }
+
+ void alright()
+ {thumb.write(40);
+ index.write(20);
+ middle.write(0);
+ pinky.write(0);
+  thumbSide.write(0);
+ delay(500);}
+
+ void  thumb_up()
+ {thumb.write(100);
+ index.write(0);
+ middle.write(180);
+ pinky.write(180);
+  thumbSide.write(70);
+ delay(500); }
+
+ void come_here()
+ {
+ while( biceps >= threshold3 &&  upperarm >= threshold2)
+ {
+  close_hand();
+  delay(400);
+  pointing();
+  delay(400);
+  upperarm = analogRead(A3);
+ // lowerarm = analogRead(A2); 
+  biceps = analogRead(A1);  
+} }
