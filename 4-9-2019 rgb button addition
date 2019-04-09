@@ -1,0 +1,677 @@
+//library for descriptive statistics
+#include <QuickStats.h>
+//library for servos
+#include <Servo.h>
+//library for bluetooth
+#include <SoftwareSerial.h>
+//library for non-volatile memory
+#include <EEPROM.h>
+//library for Voltage reading and LCD display
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#include <Fonts/FreeMonoBoldOblique12pt7b.h>
+//Instances of Servo class
+Servo thumbServo, indexServo, middleServo, ringPinkyServo, thumbSideServo;
+
+//Instance of QuickStats class
+QuickStats stats;
+
+//Initialize serial communication on pins 2 and 3
+SoftwareSerial BTserial(2, 3);
+
+//define Pins for each servo
+#define thumbPin 4
+#define indexPin 5
+#define middlePin 6
+#define ringPinkyPin 7
+#define thumbSidePin 8
+
+
+// define the display screen
+#define OLED_RESET 9
+Adafruit_SSD1306 Display(OLED_RESET);
+
+//define Pins for MyoWare sensors
+#define bicepsPin A1
+#define lowerArmPin A2
+#define upperArmPin A3
+
+//define pin for button and its colors
+#define redPin 9
+#define bluePin 10
+#define greeenPin 11
+#define buttonPin 12
+
+//declare and initialize variables
+//thresholds for each sensor
+int lowerArmThreshold = 250;
+int upperArmThreshold = 300;
+int bicepsThreshold = 350;
+//a minimum and a maximum threshold used to check if calculated thresholds are correct
+int minThreshold = 200;
+int maxThreshold = 600;
+
+//variables to read Myoware Sensor input
+int lowerArmValue = 0;
+int upperArmValue = 0;
+int bicepsValue = 0;
+
+//number of readings for each sensor
+const int numReadings = 100;
+//array to hold readings
+float readings[numReadings] = {0};
+
+//counter
+int i = 0;
+long color = 0;
+
+//variable to ceck if button pressed
+int buttonState = 0;
+//variable for mode (can be 1 and 2)
+int mode  = 1;
+//variable for gesture names
+String gest = " open hand";
+
+//boolean variables for calibration
+bool calibrated = false;
+bool calibratedLowerArmSensor = false;
+bool calibratedUpperArmSensor = false;
+bool calibratedBicepsSensor = false; 
+
+//array and size of array to hold data read by bluetooth
+const int numCharacters = 32;
+char receivedChars[numCharacters];
+//boolean variable to keep track when new data received from BT
+bool newData = false;
+//constant characters to be sent or received via bluetooth
+//these caracters will be received from Android app
+const char START_CALIBRATION = 'C';
+const char CALIBRATE_LAS = '1';
+const char CALIBRATE_UAS = '2';
+const char CALIBRATE_BS = '3';
+//these characters will be sent to Android app
+const char LAS_CALIBRATED = 'A';
+const char UAS_CALIBRATED = 'B';
+const char BS_CALIBRATED = 'C';
+const char CALIBRATION_FINISHED = 'F';
+
+
+
+//addresses where thresholds are stored in EEPROM
+int addressLowerArmThreshold = 0;
+int addressUpperArmThreshold = 2;
+int addressBicepsThreshold = 4; 
+
+//functions declaration
+//Prints average, median, mean, maximum, minimum of an array of floats
+void printStatistics( float *array, int size);
+
+//Reads "numReadings" times from the analog input pin and it returns the median
+int sensorCalibration(int pin);
+//Checks validity of a threshold
+bool isThresholdValid(int thresh);
+
+//Reads the analog input pin 10x and returns an average
+int getSensorValue(int pin);
+
+//Functions for gestures of the arm
+void open_hand();
+void close_hand();
+void pointing();
+void pincing();
+void peace_out();
+void alright();
+void thumb_up();
+void come_here();
+void doAllGestures();
+
+//Bluetooth communications functions
+void showNewData();
+void receiveData();
+void processIncomingData();
+void sendData(char data);
+
+//writing thresholds to EEPROM
+void writeThresholdsToEEPROM();
+void readThresholdsFromEEPROM();
+
+/**********************************************************************
+ This is the setup function. It runs once when the Arduino is turned on
+ **********************************************************************/
+void setup() {
+  // put your setup code here, to run once:
+
+   //start serial communication with Serial Monitor and bluetooth module
+  
+   Display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+   Serial.begin(9600);
+  BTserial.begin(9600);
+
+  //attach servos
+  thumbServo.attach(thumbPin);
+  indexServo.attach(indexPin);
+  middleServo.attach(middlePin);
+  ringPinkyServo.attach(ringPinkyPin);
+  thumbSideServo.attach(thumbSidePin);
+
+  open_hand();
+  
+  // button colors
+  randomSeed(analogRead(0));
+   analogWrite(10, HIGH);
+  
+    
+  // LCD setup
+  Display.clearDisplay();
+  Display.setFont(&FreeMonoBoldOblique12pt7b);
+  Display.setTextSize(0);
+  Display.setTextColor(WHITE, BLACK);
+  Display.setCursor(0, 18);
+  Display.println("U-Arm");
+  Display.drawLine(1,22,72,22,WHITE);  
+  Display.drawLine(0,24,70,24,WHITE);
+  Display.fillRect(123,9.5,5,8,WHITE);
+  Display.drawRect(75,0,48,27,WHITE);
+  Display.display();
+  delay (1000);
+  Display.setFont(NULL);
+
+  //We need to read all the thresholds stored in EEPROM and turn the calibrated boolean variables true
+  //writeThresholdsToEEPROM();
+  //readThresholdsFromEEPROM();
+  
+  //Serial.println(lowerArmThreshold);
+  //Serial.println(upperArmThreshold);
+  //Serial.println(bicepsThreshold);
+
+  //calibrated = true;
+  //run this function to check that all servos are working properly
+  //doAllGestures();
+
+}
+
+
+/******************************************
+ This is the main loop that repeats forever
+ *****************************************/
+ 
+void loop() {
+  // put your main code here, to run repeatedly:
+// LCD
+DrawTitles(double(readVcc())/1024);
+ /* receiveData();
+  showNewData();
+
+  //
+  processIncomingData();
+
+  //check if calibrated
+  if (!calibrated) {
+    if(!calibratedLowerArmSensor) {
+      //calibrate lowerArm sensor
+      lowerArmThreshold = sensorCalibration(lowerArmPin);
+      //check if threshold is valid
+      if(isThresholdValid(lowerArmThreshold)) {
+        calibratedLowerArmSensor = true;
+        //sendData to app to inform that step 1 completed
+        Serial.print("The threshold value is: " + lowerArmThreshold);
+        sendData(LAS_CALIBRATED);
+      } 
+    }/*
+    /*
+    //calibrate upperArm sensor
+    if(!calibratedUpperArmSensor) {
+      //calibrate lowerArm sensor
+      upperArmThreshold = sensorCalibration(upperArmPin);
+      //check if threshold is valid
+      if(isThresholdValid(upperArmThreshold)) {
+        calibratedUpperArmSensor = true;
+        //sendData to app to inform that step 1 completed
+        sendData(UAS_CALIBRATED);
+      } 
+    }
+    //calibrate biceps sensor
+    if(!calibratedBicepsSensor) {
+      //calibrate lowerArm sensor
+      bicepsThreshold = sensorCalibration(bicepsPin);
+      //check if threshold is valid
+      if(isThresholdValid(bicepsThreshold)) {
+        calibratedBicepsSensor = true;
+        //sendData to app to inform that step 1 completed
+        sendData(BS_CALIBRATED);
+      } 
+    }
+    //We should store this values in the EEPROM memory
+    writeThresholdsToEEPROM();
+    //If all sensor were calibrated, make calibrated variable true
+    if(calibratedLowerArmSensor && calibratedUpperArmSensor && calibratedBicepsSensor) {
+      calibrated = true;
+      sendData(CALIBRATION_FINISHED);
+    }
+  }*/
+
+
+
+
+  //get sensor values at lowerArmPin, upperArmPin, bicepsPin
+  lowerArmValue = getSensorValue(lowerArmPin);
+  upperArmValue = getSensorValue(upperArmPin);
+  bicepsValue = getSensorValue(bicepsPin);
+
+  //Read button state, if pressed
+  buttonState = digitalRead(buttonPin);
+  Serial.println("reading at button");
+  Serial.println(buttonState);
+
+  // check if the pushbutton was pressed and change modes accordingly
+  if (buttonState == HIGH && mode == 1)
+  {
+    mode = 2;
+    analogWrite(10, 0);
+    analogWrite(11, 255);
+      }
+  else if (buttonState == HIGH && mode == 2)
+  {
+    mode = 1;
+    
+    analogWrite(11, 0);
+    analogWrite(10, 255);
+  }
+  delay(500);
+
+  //Checking modes
+  if (mode == 1)
+  {
+    //check if sensor value is higher then threshold and move the arm accordingly
+    if (bicepsValue > bicepsThreshold && lowerArmValue < lowerArmThreshold)
+    { close_hand();
+     gest= "close hand";
+      delay(1500);
+    }
+    else if (lowerArmValue > lowerArmThreshold)
+    { pincing();
+    gest ="  pincing ";
+      delay(1500);
+    }
+    else if (upperArmValue > upperArmThreshold)
+    { pointing();
+    gest= " pointing ";
+      delay(1500);
+    }
+    else if (bicepsValue < bicepsThreshold && upperArmValue < upperArmThreshold && lowerArmValue < lowerArmThreshold)
+    { open_hand();
+    gest= " open hand";
+    }
+  }
+  else if (mode == 2)
+  {
+    if (bicepsValue > bicepsThreshold && lowerArmValue < lowerArmThreshold)
+    { peace_out();
+    gest = " peace out";
+      delay(1500);
+    }
+    else if (lowerArmValue > lowerArmThreshold)
+    { alright();
+    gest= "  alright ";
+      delay(1500);
+    }
+    else if (upperArmValue > upperArmThreshold)
+    { thumb_up();
+    gest= " thumb up ";
+      delay(1500);
+    }
+    else if (bicepsValue < bicepsThreshold && upperArmValue < upperArmThreshold && lowerArmValue < lowerArmThreshold)
+    { open_hand();
+    gest= " open hand";
+    }
+  }
+
+  delay(100);
+
+
+}
+
+
+
+/**********************************************
+ Function definition
+ ***********************************************/
+void printStatistics( float *array, int size)
+{
+  Serial.println("Descriptive Statistics");
+  Serial.print("Average: ");
+  Serial.println(stats.average(array, size));
+  Serial.print("Geometric mean: ");
+  Serial.println(stats.g_average(array, size));
+  Serial.print("Median: ");
+  Serial.println(stats.median(array, size));
+  Serial.print("Minimum: ");
+  Serial.println(stats.minimum(array, size));
+  Serial.print("Maximum: ");
+  Serial.println(stats.maximum(array, size));
+  Serial.println("\n");
+}
+
+int sensorCalibration(int pin)
+{
+  float array[numReadings] = {0};
+  for (int i = 0; i < numReadings; i++)
+  {
+    array[i] = analogRead(pin);
+    delay(100);
+  }
+
+  printStatistics(array, numReadings);
+  return stats.average(array, numReadings);
+}
+long readVcc() {
+  long result;
+  // Read 1.1V reference against AVcc
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Convert
+  while (bit_is_set(ADCSRA, ADSC));
+  result = ADCL;
+  result |= ADCH << 8;
+  result = 1126400L / result; // Back-calculate AVcc in mV
+  return result;
+}
+
+void DrawTitles(double volt) {
+   Display.setTextSize(2);
+  Display.setTextColor(WHITE, BLACK);
+    Display.setCursor(25, 30);
+  Display.print(" Set ");
+  Display.println(mode);
+  Display.print(gest);
+   Display.display();
+Serial.println(volt);
+     if(volt >= 4.65)
+ { Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,WHITE);
+   Display.fillRect(113,2,8,23,WHITE);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);
+   analogWrite(9, 255);}
+   else if(volt < 4.47 &&volt >= 4.29)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,WHITE);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);
+   analogWrite(9, 255);}
+   else if(volt < 4.29 &&volt >= 4.11)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,WHITE);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, BLACK);
+   Display.fillTriangle(103,17,  105,16,  103,15, WHITE);
+   Display.fillTriangle(112,5,  103,7,  103,10, WHITE);
+   analogWrite(9, 255);
+  }
+   else if(volt < 4.11 &&volt >= 3.93)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,WHITE);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, BLACK);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);
+   Display.fillTriangle(94,20,  105,16,  99,11, WHITE);
+   Display.fillTriangle(94,15,  94,20,  99,11, WHITE);
+   analogWrite(9, 255);
+    }
+   else if(volt < 3.93 &&volt >= 3.75)
+   {Display.fillRect(77,2,8,23,WHITE);
+   Display.fillRect(86,2,8,23,BLACK);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, WHITE);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);
+  analogWrite(9, 255); }
+   else 
+   {Display.fillRect(77,2,8,23,BLACK);
+   Display.fillRect(86,2,8,23,BLACK);
+   Display.fillRect(95,2,8,23,BLACK);
+   Display.fillRect(104,2,8,23,BLACK);
+   Display.fillRect(113,2,8,23,BLACK);
+   Display.fillTriangle(85,22,  105,16,  99,11, WHITE);
+   Display.fillTriangle(112,4,  93,8,  99,13, WHITE);
+   //red light
+    analogWrite(10, 0);
+    analogWrite(11, 0);
+    analogWrite(9, 0);}
+   Display.display();
+}
+void button_colors()
+ { color = random(1,4);
+ if( 1 == color)
+{
+  analogWrite(10,0);
+    analogWrite(11, 255);
+    analogWrite(9, 255);
+}
+else if( 2 == color)
+{
+  analogWrite(10,0);
+    analogWrite(11, 0);
+    analogWrite(9, 255);}
+else if( 3 == color)
+{
+    analogWrite(10,0);
+    analogWrite(11, 0);
+    analogWrite(9, 0);}
+    else if( 4 == color)
+{
+  analogWrite(10,255);
+    analogWrite(11, 0);
+    analogWrite(9, 255);}
+    delay(100);
+  }
+
+int getSensorValue(int pin)
+{
+  int value = 0;
+  for (int i = 0; i < 10; i++)
+  {
+    value += analogRead(pin);
+  }
+  return value / 10;
+}
+
+void doAllGestures()
+{
+  close_hand();
+  delay(500);
+  open_hand();
+  delay(500);
+  pincing();
+  delay(500);
+  open_hand();
+  delay(500);
+  pointing();
+  delay(500);
+  open_hand();
+  delay(500);
+  peace_out();
+  delay(500);
+  open_hand();
+  delay(500);
+  thumb_up();
+  delay(500);
+  open_hand();
+  delay(500);
+}
+
+
+void open_hand()
+{
+  thumbServo.write(100);
+  indexServo.write(180);
+  middleServo.write(0);
+  ringPinkyServo.write(0);
+  thumbSideServo.write(70);
+  
+}
+
+void close_hand()
+{
+  thumbServo.write(10);
+  indexServo.write(0);
+  middleServo.write(180);
+  ringPinkyServo.write(180);
+  thumbSideServo.write(30);
+}
+
+void pointing()
+{
+  thumbServo.write(10);
+  indexServo.write(180);
+  middleServo.write(180);
+  ringPinkyServo.write(180);
+  thumbSideServo.write(30);
+}
+
+void pincing()
+{
+  thumbServo.write(30);
+  indexServo.write(20);
+  middleServo.write(100);
+  ringPinkyServo.write(0);
+  thumbSideServo.write(0);
+}
+
+void peace_out()
+{
+  thumbServo.write(10);
+  indexServo.write(180);
+  middleServo.write(0);
+  ringPinkyServo.write(180);
+  thumbSideServo.write(20);
+}
+
+void alright()
+{
+  thumbServo.write(40);
+  indexServo.write(20);
+  middleServo.write(0);
+  ringPinkyServo.write(0);
+  thumbSideServo.write(0);
+}
+
+void  thumb_up()
+{
+  thumbServo.write(100);
+  indexServo.write(0);
+  middleServo.write(180);
+  ringPinkyServo.write(180);
+  thumbSideServo.write(70);
+}
+
+void come_here()
+{
+  while ( bicepsValue >= bicepsThreshold &&  upperArmValue >= upperArmThreshold)
+  {
+    close_hand();
+    delay(400);
+    pointing();
+    delay(400);
+    upperArmValue = analogRead(upperArmPin);
+    bicepsValue = analogRead(bicepsPin);
+  }
+}
+void receiveData() {
+  static boolean recvInProgress = false;
+  static int ndx = 0;
+  char startMarker = '<';
+  char endMarker = '>';
+  char character;
+
+  while (BTserial.available() > 0 && newData == false) {
+    
+    character = BTserial.read();
+
+    if (recvInProgress == true) {
+      if (character != endMarker) {
+        receivedChars[ndx] = character;
+        ndx++;
+        if (ndx >= numCharacters) {
+          ndx = numCharacters - 1;
+        }
+      }
+      else {
+        receivedChars[ndx] = '\0'; // terminate the string
+        recvInProgress = false;
+        ndx = 0;
+        newData = true;
+      }
+    }
+
+    else if (character == startMarker) {
+      recvInProgress = true;
+    }
+  }
+}
+
+void showNewData() {
+  if (newData == true) {
+    Serial.print("This just in ... ");
+    Serial.println(receivedChars);
+  }
+}
+
+void processIncomingData() {
+  if(newData == true) {
+    char data = receivedChars[0];
+    Serial.print("This is the data being received: " + data);
+    if(data == START_CALIBRATION) {
+      calibrated = false;
+    }
+    if(data == CALIBRATE_LAS) {
+      calibratedLowerArmSensor = false;
+    }
+    if(data == CALIBRATE_UAS) {
+      calibratedUpperArmSensor = false;
+    }
+    if(data == CALIBRATE_BS) {
+      calibratedBicepsSensor = false;
+    }}
+    newData = false;
+
+}
+
+
+void sendData(char data) {
+  BTserial.print(data);
+}
+
+bool isThresholdValid(int thresh) {
+  if(thresh >= minThreshold && thresh <= maxThreshold) {
+    return true;
+  }
+  else
+  {
+    return false;
+    //some code to send data to UArm app to redo calibration 
+  }
+}
+
+void writeThresholdsToEEPROM() {
+  EEPROM.put(addressLowerArmThreshold, lowerArmThreshold);
+  EEPROM.put(addressUpperArmThreshold, upperArmThreshold);
+  EEPROM.put(addressBicepsThreshold, bicepsThreshold);
+}
+void readThresholdsFromEEPROM() {
+  EEPROM.get(addressLowerArmThreshold, lowerArmThreshold);
+  EEPROM.get(addressUpperArmThreshold, upperArmThreshold);
+  EEPROM.get(addressBicepsThreshold, bicepsThreshold);
+}
