@@ -39,9 +39,9 @@ SoftwareSerial BTserial(2, 3);
 
 //declare and initialize variables
 //thresholds for each sensor
-int lowerArmThreshold = 250;
-int upperArmThreshold = 400;
-int bicepsThreshold = 200;
+int lowerArmThreshold = 0;
+int upperArmThreshold = 0;
+int bicepsThreshold = 0;
 //a minimum and a maximum threshold used to check if calculated thresholds are correct
 int minThreshold = 200;
 int maxThreshold = 600;
@@ -198,12 +198,12 @@ void loop() {
   //check if calibrated
   if(calibrated)
   {
-    if(!isThresholdValid(lowerArmThreshold) || !isThresholdValid(upperArmThreshold) || !isThresholdValid(bicepsThreshold)) {
+  /*  if(!isThresholdValid(lowerArmThreshold) || !isThresholdValid(upperArmThreshold) || !isThresholdValid(bicepsThreshold)) {
       //print a message to the LCD screen stating that UArm needs calibration
-      
     }
     else 
-    {
+    {*/ Serial.print("Testing");
+       Serial.print(calibrated);
       //get sensor values at lowerArmPin, upperArmPin, bicepsPin
       //Display battery level on LCD
      // DrawTitles(double(readVcc())/1024);
@@ -224,7 +224,7 @@ void loop() {
       if (buttonState == HIGH && mode == 1) { mode = 2; Serial.print(mode); analogWrite(10, 0); analogWrite(11, 255); }
 
       else if (buttonState == HIGH && mode == 2) { mode = 1; Serial.print(mode); analogWrite(11, 0); analogWrite(10, 255);}
-displayingBatteryLife();
+
       //Checking modes
       if (mode == 1) {
         //when flag=1 do gesture, when flag=2 open hand
@@ -291,8 +291,10 @@ displayingBatteryLife();
           } 
         }
       }
+      
+   displayingBatteryLife();
       delay(1500);
-    }
+    //}
   }
 }
 //end of main loop
@@ -532,6 +534,7 @@ void processIncomingData() {
       if(calibratedLowerArmSensor && calibratedUpperArmSensor && calibratedBicepsSensor) {
         BTserial.print(F("S"));
         calibrated = true;
+        Serial.print(calibrated);
         writeThresholdsToEEPROM();
       }
       else
@@ -565,6 +568,7 @@ void readThresholdsFromEEPROM() {
   EEPROM.get(addressUpperArmThreshold, upperArmThreshold);
   EEPROM.get(addressBicepsThreshold, bicepsThreshold);
 }
+
 
 
 void displayingBatteryLife(){
